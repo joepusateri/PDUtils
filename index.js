@@ -25,9 +25,6 @@ var message_type_strings = {
   'incident.delegate': 'delegated'
 };
 
-var AWS = require('aws-sdk');
-
-
 app.set('port', (process.env.PORT || 5000));
 
 app.use(bodyParser.json());
