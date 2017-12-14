@@ -256,3 +256,27 @@ function lookupEmailForNote(token, userId, incidentURL, note) {
     }
   });
 }
+
+function addNote(token, incidentURL, fromEmail, note) {
+  var body = {
+    "note": {
+      "content": note
+    }
+  };
+  var options = {
+    headers: {
+      "Content-type": "application/json",
+      "Accept": "application/vnd.pagerduty+json;version=2",
+      "Authorization": "Token token=" + token,
+      "From": fromEmail
+    },
+    uri: incidentURL + "/notes",
+    method: "POST",
+    json: body
+  };
+  request(options, function(error, response, body) {
+    if (!response.statusCode || response.statusCode < 200 || response.statusCode > 299) {
+      console.log("Error adding note: " + error + "\nResponse: " + JSON.stringify(response, null, 2) + "\nBody: " + JSON.stringify(body, null, 2));
+    }
+  });
+}
