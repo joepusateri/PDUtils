@@ -199,3 +199,60 @@ function mergeIncident(token, parentId, childId, fromEmail) {
     }
   });
 }
+
+// Checkin
+
+app.post('/checkin', function(req, res) {
+  console.log('Starting Check-in');
+  token = req.query.token;
+  var priorityName = req.query.priority;
+
+  req.body.messages.forEach(function(message) {
+
+    try {
+      if (message.log_entries[0].agent.type == 'user_reference') {
+        requesterID = message.log_entries[0].agent.id;
+        var name =  message.log_entries[0].agent.summary;
+        console.log("agent");
+        console.log(name);
+        console.log(message.log_entries[0].agent);
+      }
+    } catch (e) {}
+
+    if (!requesterID) {
+      requesterID = req.query.requester_id;
+    }
+
+    console.log(message);
+    var incidentURL = req.body.messages[0].incident.self;
+
+    lookupEmailForNote(token, requesterID, incidentURL, name + " has checked in to the call");
+  });
+  res.end();
+});
+
+function lookupEmailForNote(token, userId, incidentURL, note) {
+  console.log("Looking up email for  %s", userId);
+
+  var options = {
+    headers: {
+      "Content-type": "application/json",
+      "Accept": "application/vnd.pagerduty+json;version=2",
+      "Authorization": "Token token=" + token
+    },
+    uri: "https://api.pagerduty.com/users/" + userId,
+    method: 'GET'
+  }
+
+  request(options, function(error, response, body) {
+    if (!response.statusCode || response.statusCode < 200 || response.statusCode > 299) {
+      console.log("Error getting trigger log entry: " + error + "\nResponse: " + JSON.stringify(response, null, 2) + "\nBody: " + JSON.stringify(body, null, 2));
+    } else {
+      console.log("Retrieved successfully");
+      var results = JSON.parse(body);
+      var email = results.user.email;
+      addNote(token, incidentURL, email, note);
+
+    }
+  });
+}
