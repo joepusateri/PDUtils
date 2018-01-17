@@ -280,3 +280,137 @@ function addNote(token, incidentURL, fromEmail, note) {
     }
   });
 }
+
+//clone
+
+
+app.post('/clone', function(req, res) {
+  console.log('Starting Clone');
+  token = req.query.token;
+
+  req.body.messages.forEach(function(message) {
+
+    try {
+      if (message.log_entries[0].agent.type == 'user_reference') {
+        requesterID = message.log_entries[0].agent.id;
+        console.log("agent");
+        console.log(message.log_entries[0].agent);
+      }
+    } catch (e) {}
+
+    if (!requesterID) {
+      requesterID = req.query.requester_id;
+    }
+
+    console.log(message);
+
+    lookupEmailForClone(token, requesterID, message, req.query.serviceid)
+  });
+  res.end();
+});
+
+function lookupEmailForClone(token, userId, message, serviceId) {
+  console.log("Looking up email for  %s", userId);
+
+  var options = {
+    headers: {
+      "Content-type": "application/json",
+      "Accept": "application/vnd.pagerduty+json;version=2",
+      "Authorization": "Token token=" + token
+    },
+    uri: "https://api.pagerduty.com/users/" + userId,
+    method: 'GET'
+  }
+
+  request(options, function(error, response, body) {
+    if (!response.statusCode || response.statusCode < 200 || response.statusCode > 299) {
+      console.log("Error getting trigger log entry: " + error + "\nResponse: " + JSON.stringify(response, null, 2) + "\nBody: " + JSON.stringify(body, null, 2));
+    } else {
+      console.log("Retrieved successfully");
+      var results = JSON.parse(body);
+      var email = results.user.email;
+      //console.log("email:" + email)
+      createIncidentForClone(token, email, serviceId, message);
+    }
+  });
+}
+
+function createIncidentForClone(token, fromEmail, serviceId, message) {
+  //console.log("fromEmail" + fromEmail)
+
+  //var incidentNo = 456;
+  //var incidentTitle = 'Something really cool'
+  var body_out = {
+    'incident': {
+      'type': 'incident',
+      'title': 'Clone:' + message.incident.incident_number + ' ' + , message.incident.title,
+      'service': {
+        'id': serviceId,
+        'type': 'service_reference'
+      },
+      'incident_key': '',
+      'body': {
+        'type': 'incident_body',
+        'details': 'This incident is used to resolve a high priority incident that has been downgraded'
+      },
+      'priority': {
+        'id': message.priority.id,
+        'type': 'priority'
+      }
+    }
+  };
+
+  var options = {
+    headers: {
+      "Content-type": "application/json",
+      "Accept": "application/vnd.pagerduty+json;version=2",
+      "Authorization": "Token token=" + token,
+      "From": fromEmail
+    },
+    uri: "https://api.pagerduty.com/incidents/",
+    method: 'POST',
+    json: body_out
+  }
+
+  request(options, function(error, response, body) {
+    if (!response.statusCode || response.statusCode < 200 || response.statusCode > 299) {
+      console.log("Error getting trigger log entry: " + error + "\nResponse: " + JSON.stringify(response, null, 2) + "\nBody: " + JSON.stringify(body, null, 2));
+    } else {
+      //console.log(JSON.stringify(body, null, 2));
+      var id = body.incident.id;
+      console.log("Finished creating incident")
+      mergeIncidentForClone(token, id, message.incident.id, fromEmail)
+    }
+  });
+}
+
+function mergeIncidentForClone(token, parentId, childId, fromEmail) {
+
+  console.log("Merging parent %s to child %s", parentId, childId);
+  var body_out = {
+    'source_incidents': [{
+      'id': childId,
+      'type': 'incident_reference'
+    }]
+  };
+
+  var options = {
+    headers: {
+      "Content-type": "application/json",
+      "Accept": "application/vnd.pagerduty+json;version=2",
+      "Authorization": "Token token=" + token,
+      "From": fromEmail
+    },
+    uri: "https://api.pagerduty.com/incidents/" + parentId + "/merge",
+    method: 'PUT',
+    json: body_out
+  }
+
+  request(options, function(error, response, body) {
+    if (!response.statusCode || response.statusCode < 200 || response.statusCode > 299) {
+      console.log("Error getting trigger log entry: " + error + "\nResponse: " + JSON.stringify(response, null, 2) + "\nBody: " + JSON.stringify(body, null, 2));
+    } else {
+      console.log("Merged successfully");
+    }
+  });
+}
